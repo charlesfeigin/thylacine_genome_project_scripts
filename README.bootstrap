@@ -1,0 +1,66 @@
+
+# A typical MSMC bootstrap is performed by first concatenating MSMC input
+# files for all chromosomes, then sampling chunks with replacement until
+# the sum of the sampled chunks is an equivalent genome size.
+# msmc-tools provide a script for this:
+# https://github.com/stschiff/msmc-tools/blob/master/multihetsep_bootstrap.py
+#
+# By default this script samples 20 5mb chunks, placing them sequentually
+# to make a 100mb pseudo-chromosome.  30 such pseudo-chromosomes are
+# constructed with default settings.  This bootstrap strategy accounts for
+# (1) variability in demographic inference along the chromosomes and
+# (2) variability due to a small rate of false recombinations,
+#     induced at chromosome boundaries and at chunk boundaries.
+#
+# For a chromosome level reference assembly, the impact of (2) should be minor.
+# The scaffolds we have used are roughly Exponentially distributed, ranging
+# between 1mb-5mb (remembering that 1mb was our lower cutoff for a scaffold's
+# inclusion).  Thus the impact of (2) for our assembly is likely to be major,
+# and not representative of falsely detecting recombinations from our data.
+#
+# We instead choose to sample scaffolds, with replacement, until the total
+# orignal data size is reached.  Because (1) ought to also include variability
+# in erroneously detected recombinations, we believe this resampling strategy
+# is more appropriate for data mapped to a scaffold level assembly.
+
+
+# We need the size for each of the included scaffolds.
+./scripts/colgrep.py \
+	-c 1 \
+	-f data/devil.scaffolds.1mb.no-x-linked.txt \
+	< /localscratch/Refs/Sarcophilus_harrisii/Devil7_0_Raw/Sarcophilus_harrisii.DEVIL7.0.dna_rm.toplevel.fasta.fai \
+	> data/devil.scaffolds.1mb.no-x-linked.fai
+
+# Check the scaffold length histogram for our included scaffolds.
+./scripts/plot_hist_from_fai.py \
+	data/devil.scaffolds.1mb.no-x-linked.fai
+	data/devil.scaffolds.1mb.no-x-linked.length-hist.pdf
+
+# Create dirs with bootstrap replicated MSMC input files (Devil).
+./scripts/scaffold_bootstrap.py \
+	data/devil.scaffolds.1mb.no-x-linked.fai \
+	/localscratch/AussieGenomes.msmc_stuff/TasmanianDevil/paleomix_MEM/msmc \
+	/localscratch/AussieGenomes.msmc_stuff/TasmanianDevil/paleomix_MEM/msmc_bootstrap
+
+# Create dirs with bootstrap replicated MSMC input files (Thylacine).
+./scripts/scaffold_bootstrap.py \
+	data/devil.scaffolds.1mb.no-x-linked.fai \
+	/localscratch/AussieGenomes.msmc_stuff/Thylacine/paleomix_MEM/msmc \
+	/localscratch/AussieGenomes.msmc_stuff/Thylacine/paleomix_MEM/msmc_bootstrap
+
+
+# Call msmc1 to do the PSMC'.
+idir1=/localscratch/AussieGenomes.msmc_stuff/TasmanianDevil/paleomix_MEM/msmc_bootstrap
+idir2=/localscratch/AussieGenomes.msmc_stuff/Thylacine/paleomix_MEM/msmc_bootstrap
+
+for d in $idir1/* $idir2/*; do
+	msmc \
+		-i 50 \
+		-t 12 \
+		-o $d/msmc1.out \
+		$d/*.MSMC.txt
+done
+
+
+# Plot the result.
+Rscript ./scripts/Plot_MSMC-bootstrap.R
